@@ -1,7 +1,7 @@
 import urllib
 
-API_BASE_URL = 'http://animeraiku.dev.dev/api/'
-CDN_BASE_URL = 'http://cdn.animeraiku.dev/'
+API_BASE_URL = 'https://animeraiku.com/api/'
+CDN_BASE_URL = 'https://cdn.animeraiku.com/'
 API_SEARCH = 'CreativeWork/lookup'
 API_DETAILS = 'CreativeWork/'
 
@@ -58,6 +58,7 @@ class AnimeRaikuAgent(Agent.TV_Shows):
 
     def update(self, metadata, media, lang, force):
         try:
+            Log('Actualizando información')
             series_data = JSON.ObjectFromString(
                 ApiCall(API_BASE_URL + API_DETAILS + metadata.id))['data']
 
@@ -67,14 +68,20 @@ class AnimeRaikuAgent(Agent.TV_Shows):
             date_start = series_data['attributes'].get('date_start', None)
             if date_start is not None:
                 metadata.originally_available_at = Datetime.ParseDate(date_start).date()
-            metadata.duration = series_data['attributes'].get('time_required', 0) * 1000
+
+            metadata.duration = 0
+            if 'time_required' in series_data['attributes'] and series_data['attributes']['time_required'] is not None:
+                metadata.duration = series_data['attributes'].get('time_required', 0) * 1000
+
             if series_data['attributes'].get('country', '') == 'JP':
                 metadata.countries = ['Japón']
             else:
                 metadata.countries = None
 
             if metadata.duration == 0:
-                metadata.duration = None
+                metadata.duration = 25
+
+            Log('Actualizando organizaciones')
             if 'organization' in series_data['attributes']:
                 for i, r in enumerate(series_data['attributes']['organization']):
                     if series_data['attributes']['organization'][i]['task'] == 'Animation Production':
@@ -83,6 +90,9 @@ class AnimeRaikuAgent(Agent.TV_Shows):
             if 'cover' in series_data['attributes'] and 'medium' in series_data['attributes']['cover'] and series_data['attributes']['cover']['medium'] != '':
                 Log('New Cover: ' + CDN_BASE_URL+series_data['attributes']['cover']['medium'])
                 metadata.posters[CDN_BASE_URL+series_data['attributes']['cover']['medium']] = Proxy.Preview(CDN_BASE_URL+series_data['attributes']['cover']['small'], sort_order=1)
+            else:
+                Log('El anime no tiene Cover')
+
         except Exception as e:
             Log('Content Error (%s) - %s' % (e, e.message))
 
@@ -94,39 +104,20 @@ class AnimeRaikuAgent(Agent.TV_Shows):
         for i, r in enumerate(series_data['attributes'].get('name', '')):
             if series_data['attributes']['name'][i]['lang'] == 'JA-X' and series_data['attributes']['name'][i]['type'] == 'MAIN':
                 series_name = series_data['attributes']['name'][i]['content']
+        if series_name is None:
+            for i, r in enumerate(series_data['attributes'].get('name', '')):
+                if series_data['attributes']['name'][i]['lang'] == 'ES' and series_data['attributes']['name'][i]['type'] == 'MAIN':
+                    series_name = series_data['attributes']['name'][i]['content']
 
-        # try:
-        #     series_year = series_data['date_start'][:4]
-        # except:
+        if series_name is None:
+            for i, r in enumerate(series_data['attributes'].get('name', '')):
+                if series_data['attributes']['name'][i]['lang'] == 'EN' and series_data['attributes']['name'][i]['type'] == 'MAIN':
+                    series_name = series_data['attributes']['name'][i]['content']
+
         series_year = None
 
-        if not series_name:
-            Log('No encontrado nombre valido')
-            return
-
-        clean_series_name = series_name.lower()
-
-        cleanShow = media.show
-
-        substringLen = len(Util.LongestCommonSubstring(cleanShow.lower(), clean_series_name))
-        cleanShowLen = len(cleanShow)
-
-        maxSubstringPoints = 5.0  # use a float
-        score += int((maxSubstringPoints * substringLen)/cleanShowLen)  # max 15 for best substring match
-
-        distanceFactor = .6
-        score = score - int(distanceFactor * Util.LevenshteinDistance(cleanShow.lower(), clean_series_name))
-
-        if series_year and media.year:
-            if media.year == series_year:
-                score += 10
-            else:
-                score = score - 10
-
-        # sanity check to make sure we have SOME common substring
-        if (float(substringLen) / cleanShowLen) < .15:  # if we don't have at least 15% in common, then penalize below the 80 point threshold
-            score = score - 25
-
+        score = 100 - int(series_data['attributes']['levenshtein'])
+        Log('Coincidencia (%s) - %s' % (series_name, score))
         # Add a result for this show
         results.Append(
           MetadataSearchResult(
