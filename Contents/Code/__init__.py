@@ -151,7 +151,7 @@ class AnimeRaikuAgent(Agent.TV_Shows):
                 metadata.duration = 25
 
             Log('Actualizando organizaciones')
-            if 'organization' in series_data['attributes']:
+            if 'organization' in series_data['attributes'] and series_data['attributes']['organization'] is not None:
                 for i, r in enumerate(series_data['attributes']['organization']):
                     if series_data['attributes']['organization'][i]['task'] == 'Animation Production':
                         metadata.studio = series_data['attributes']['organization'][i]['name']
