@@ -1,3 +1,10 @@
 [
-
+  {
+    "id": "access_token",
+    "label": "Access Token de tu cuenta de AnimeRaiku",
+    "type": "text",
+    "option": "hidden",
+    "default": "",
+    "secure": "true",
+  }
 ]
